@@ -24,7 +24,6 @@ Hoje os clientes B2B descobrem que um pedido mudou de status consultando a API p
 **Público:**
 - Clientes B2B que integram com a plataforma pela API, começando pelos três do pedido formal ([09:00] Marcos). Eles cadastram webhooks com o JWT do sistema, por meio de "usuários que representam o cliente" ([09:32] Marcos). Essa premissa não tem apoio no código (seção 10).
 - ADMIN interno, que reprocessa eventos que esgotaram as tentativas ([09:36] Sofia).
-- Time de Plataforma, que opera o processo de entrega ([09:11] Diego).
 
 **Cenários:**
 - **CEN-01 — Cadastrar um endpoint:** o cliente cadastra uma URL https e os status que quer ouvir, e recebe a secret de assinatura uma única vez, na criação ([09:31] Marcos).
@@ -40,7 +39,6 @@ Hoje os clientes B2B descobrem que um pedido mudou de status consultando a API p
 | Objetivo | Métrica | Meta | Fonte |
 | --- | --- | --- | --- |
 | Notificar em "tempo real" na definição do cliente | Tempo entre a mudança de status e o primeiro envio ao cliente ([FDD](FDD.md) §11) | < 10 segundos | [09:02] Marcos |
-| Atender o pedido formal dos três clientes | Clientes do pedido formal com webhook ativo | 3 de 3 (Atlas, MaxDistribuição, Nova Cargo) | [09:00] Marcos |
 | Não perder a Atlas | Feature em produção dentro do prazo pedido | Até o fim de novembro | [09:45] Marcos |
 | Absorver indisponibilidades do cliente sem ação humana | Janela coberta pelas retentativas antes de o evento ir para a DLQ | ~15 horas | [09:17] Diego; [09:17] Marcos |
 
@@ -168,7 +166,7 @@ As alternativas técnicas descartadas ou adiadas estão no [RFC](RFC.md) (Altern
 | RNF-010 | Consistência | Eventos do mesmo pedido chegam na ordem das mudanças, enquanto houver um único worker; não há ordem global entre pedidos | [09:12] Diego; [09:13] Larissa |
 | RNF-011 | Segurança | O replay da DLQ exige role ADMIN; o CRUD de webhooks aceita qualquer usuário autenticado nesta fase | [09:36] Sofia; [09:37] Sofia |
 | RNF-012 | Auditoria | Todo replay da DLQ registra quem o executou | [09:36] Sofia |
-| RNF-013 | Segurança | A secret só é exibida na criação e na rotação, e nunca aparece em log | [09:31] Marcos; [FDD](FDD.md) §10 |
+| RNF-013 | Segurança | A secret só é exibida na criação e na rotação, e nunca aparece em log | [09:31] Marcos; [09:21] Sofia; `src/shared/logger/index.ts` |
 
 ## 8. Decisões e Trade-offs
 
@@ -186,7 +184,7 @@ As alternativas técnicas descartadas ou adiadas estão no [RFC](RFC.md) (Altern
 ## 9. Dependências
 
 - Fluxo de mudança de status do time de Pedidos — o evento nasce dentro de `changeStatus`, que precisa ser alterado, [09:40] Bruno; `src/modules/orders/order.service.ts`.
-- Time de Plataforma — opera o worker como segundo processo em produção, com o mesmo banco, [09:11] Diego.
+- Segundo processo em produção — o worker roda separado da API, no mesmo banco, [09:11] Diego. Quem opera esse processo não foi definido (seção 13).
 - MySQL existente — é a única infraestrutura da feature, [09:07] Diego; `docker-compose.yml`.
 - Revisão de segurança da Sofia — pelo menos dois dias úteis antes do deploy, com foco em HMAC e geração de secret, [09:46] Sofia; [09:49] Sofia.
 - Sessão de revisão do design com Bruno e Diego — antes de começar a codar, [09:50] Larissa.
@@ -206,7 +204,7 @@ As alternativas técnicas descartadas ou adiadas estão no [RFC](RFC.md) (Altern
 | Um evento em retentativa pode ser ultrapassado pelo seguinte do mesmo pedido, contra a ordem prometida | Média | Médio | Não prometer ordem estrita no portal até a decisão do time | [09:12] Diego; [RFC](RFC.md) Questões em Aberto |
 | O timestamp enviado não entra na assinatura, então não protege contra replay, ao contrário do que foi dito | Média | Médio | Levar à revisão da Sofia; o portal não promete proteção contra replay até lá | [09:44] Diego; [09:22] Sofia; [verificação externa](research/verificacao-externa.md) VER-013 |
 | Sem rate limiting, um cliente com muitos pedidos mudando ao mesmo tempo recebe uma rajada de chamadas | Baixa | Médio | Observar e decidir depois, como acordado | [09:38] Diego; [09:39] Larissa |
-| Secrets guardadas de forma recuperável no banco: um vazamento de leitura expõe todas | Baixa | Alto | Levar à revisão de segurança | [ADR-005](adrs/ADR-005-assinar-webhooks-com-hmac-sha256-e-secret-por-endpoint.md); [FDD](FDD.md) R-06 |
+| Secrets guardadas de forma recuperável no banco: um vazamento de leitura expõe todas | Baixa | Alto | Levar à revisão de segurança | [09:20] Sofia; `src/modules/auth/auth.service.ts` |
 
 ## 11. Critérios de Aceitação
 
@@ -231,7 +229,7 @@ Os critérios técnicos detalhados estão no [FDD](FDD.md) §14.
 
 - **Automatizados:** testes de integração HTTP no padrão existente (Vitest + Supertest contra MySQL real, `tests/`) para o CRUD, a rotação, o histórico e o replay (RF-001, RF-002, RF-006, RF-008, RF-009). Um servidor de teste recebe os webhooks para validar latência, assinatura e payload (RF-004, RF-005, RNF-001). Testes com relógio controlado cobrem retentativas e DLQ (RF-007, RNF-008), e um teste força a falha no registro do evento (RNF-002).
 - **Validação com usuários:** revisão de segurança da Sofia antes do deploy ([09:46] Sofia); sessão de revisão do design com Bruno e Diego ([09:50] Larissa); Marcos confirma o prazo e atualiza os três clientes ([09:47] Marcos; [09:49] Marcos).
-- **Pós-lançamento:** latência do primeiro envio, taxa de sucesso por tentativa, volume na DLQ e fila pendente acompanhados pelos logs estruturados do worker ([FDD](FDD.md) §11). Adoção medida pelos webhooks ativos dos três clientes.
+- **Pós-lançamento:** latência do primeiro envio, taxa de sucesso por tentativa, volume na DLQ e fila pendente acompanhados pelos logs estruturados do worker ([FDD](FDD.md) §11).
 
 ## 13. Considerações Gerais
 
@@ -241,6 +239,8 @@ Os critérios técnicos detalhados estão no [FDD](FDD.md) §14.
 - O prazo da Atlas aparece como "fim do trimestre" ([09:00] Marcos) e como "fim de novembro" ([09:45] Marcos). A fonte não diz se é a mesma data.
 - A fonte não traz linha de base nem meta para a redução do polling em `GET /orders`. Sem esse número, a redução do polling não entra como métrica.
 - A fonte não define um piloto com os clientes antes da liberação geral.
+- A fonte não define meta de adoção: o pedido formal vem dos três clientes ([09:00] Marcos), mas não há número de clientes com webhook ativo como objetivo.
+- A fonte não define quem opera o worker em produção. Só fica dito que ele roda como processo separado, no mesmo banco ([09:11] Diego).
 - A criação do pedido (status inicial `PENDING`) não passa pela mudança de status e não gera evento nesta fase ([FDD](FDD.md) Q-07). A reunião não tratou desse caso.
 - O snapshot do payload e o id UUID da outbox foram decididos depois do resumo, sem Marcos e Sofia na call ([09:51] Larissa; [09:52] Bruno).
 - Não foi escolhido se o `customer_id` vai no body ou no path ([09:32] Larissa). O FDD propõe body na criação e query na listagem ([FDD](FDD.md) §6).

@@ -231,7 +231,7 @@ sequenceDiagram
 
 1. Um ADMIN chama `POST /api/v1/admin/webhooks/dead-letter/:id/replay` ([09:18] Diego; [09:36] Larissa).
 2. `authenticate` e `requireRole('ADMIN')` (`src/middlewares/auth.middleware.ts`) barram quem não é ADMIN com 403 `FORBIDDEN`.
-3. Numa transação: lê a linha da DLQ e rejeita se não existir (`WEBHOOK_DEAD_LETTER_NOT_FOUND`) ou se `replayedAt` já estiver preenchido (`WEBHOOK_DEAD_LETTER_ALREADY_REPLAYED`). A marcação usa `updateMany({ where: { id, replayedAt: null } })` e confere `count === 1`, para que dois replays simultâneos não gerem duas linhas.
+3. Numa transação: lê a linha da DLQ e rejeita se não existir (`WEBHOOK_DEAD_LETTER_NOT_FOUND`) ou se `replayedAt` já estiver preenchido (`WEBHOOK_DEAD_LETTER_ALREADY_REPLAYED`). A marcação usa `updateMany({ where: { id, replayedAt: null } })` e confere `count === 1`, para que dois replays simultâneos não gerem duas linhas. **A recusa de replay repetido é decisão deste FDD, não discutida na reunião**, que só define que o replay "Recoloca na outbox como pendente" ([09:18] Diego). A confirmação fica para a sessão de revisão do design (Q-14).
 4. Rejeita se o webhook estiver inativo (`WEBHOOK_INACTIVE`). **Decisão deste FDD, não discutida na reunião.** Se o replay fosse aceito, o worker devolveria o evento à DLQ no ciclo seguinte (5.3, passo 6). O `replayedAt` da linha original ficaria marcado sem que nada tivesse sido enviado, e surgiria uma linha nova na DLQ. O 409 avisa o ADMIN para reativar o webhook antes. A confirmação fica para a sessão de revisão do design ([09:50] Larissa).
 5. Insere na outbox uma linha `PENDING` com o mesmo `eventId`, `webhookId`, `orderId`, `eventType` e `payload`, `attempts = 0` e `nextAttemptAt = now()` ("Recoloca na outbox como pendente", [09:18] Diego). O `eventId` é o mesmo porque o `X-Event-Id` é "único por evento" ([09:25] Diego), e o replay reenvia o mesmo evento.
 6. Preenche `replayedAt` e `replayedById = req.user.id`. Depois do commit, loga `webhook_dead_letter_replayed` com quem fez o replay ([09:36] Sofia).
@@ -258,7 +258,7 @@ sequenceDiagram
 ### 5.5 Rotação de secret
 
 1. `POST /api/v1/webhooks/:id/rotate-secret` (o caminho é proposta, Q-01) ([09:21] Sofia).
-2. Se `previousSecretExpiresAt > now`, rejeita com `WEBHOOK_SECRET_ROTATION_IN_PROGRESS`, para que nunca existam mais de duas secrets válidas ([ADR-005](adrs/ADR-005-assinar-webhooks-com-hmac-sha256-e-secret-por-endpoint.md), Consequências: "durante as 24h, duas secrets estão válidas").
+2. Se `previousSecretExpiresAt > now`, rejeita com `WEBHOOK_SECRET_ROTATION_IN_PROGRESS`, para que nunca existam mais de duas secrets válidas ([ADR-005](adrs/ADR-005-assinar-webhooks-com-hmac-sha256-e-secret-por-endpoint.md), Consequências: "durante as 24h, duas secrets estão válidas"). **Decisão deste FDD, não discutida na reunião.** A reunião só define que a antiga fica válida por 24 horas ([09:21] Sofia). A confirmação fica para a revisão (Q-13).
 3. Gera uma nova secret (seção 10). Grava `previousSecret = secret`, `secret = nova` e `previousSecretExpiresAt = now + 24h`.
 4. Responde 200 com a nova secret. É a única outra resposta, além da criação, que devolve uma secret.
 5. Durante as 24h, o worker assina com as duas secrets (seção 10). Depois disso, ignora `previousSecret` ("Depois disso, a antiga morre", [09:21] Sofia). A expiração é lazy, sem job de limpeza.
@@ -368,6 +368,8 @@ Todas as rotas ficam sob `/api/v1` (`src/app.ts`) e entram em `buildApiRouter` (
 
 ### 6.3 `GET /api/v1/webhooks/:id`
 
+Proposta deste FDD, no padrão de `GET /orders/:id` (`src/modules/orders/order.routes.ts`). A reunião listou só PATCH, DELETE e a listagem por customer ([09:33] Bruno).
+
 - **Autenticação/autorização:** JWT, qualquer role.
 - **Headers:** `Authorization`.
 - **Request:** sem corpo. `:id` é um uuid.
@@ -429,7 +431,7 @@ Todas as rotas ficam sob `/api/v1` (`src/app.ts`) e entram em `buildApiRouter` (
 ```
   - `401` → `UNAUTHORIZED`.
   - `404` → `WEBHOOK_NOT_FOUND`.
-  - `409` — já existe rotação em grace period → `WEBHOOK_SECRET_ROTATION_IN_PROGRESS`.
+  - `409` — já existe rotação em grace period → `WEBHOOK_SECRET_ROTATION_IN_PROGRESS` (decisão deste FDD, não discutida na reunião; 5.5, passo 2).
 
 ### 6.7 `GET /api/v1/webhooks/:id/deliveries`
 
@@ -490,7 +492,7 @@ Todas as rotas ficam sob `/api/v1` (`src/app.ts`) e entram em `buildApiRouter` (
   - `401` → `UNAUTHORIZED`.
   - `403` — role diferente de ADMIN → `FORBIDDEN` (código existente do `requireRole`).
   - `404` → `WEBHOOK_DEAD_LETTER_NOT_FOUND`.
-  - `409` — já reprocessado → `WEBHOOK_DEAD_LETTER_ALREADY_REPLAYED`. Webhook inativo → `WEBHOOK_INACTIVE` (decisão deste FDD, não discutida na reunião; 5.4, passo 4).
+  - `409` — já reprocessado → `WEBHOOK_DEAD_LETTER_ALREADY_REPLAYED` (decisão deste FDD, não discutida na reunião; 5.4, passo 3). Webhook inativo → `WEBHOOK_INACTIVE` (decisão deste FDD, não discutida na reunião; 5.4, passo 4).
 
 ### 6.9 Chamada de saída: `POST {webhook.url}`
 
@@ -534,9 +536,9 @@ Classes novas em `src/modules/webhooks/webhook.errors.ts` (a criar), seguindo `I
 | `WEBHOOK_NOT_FOUND` | 404 | `:id` de webhook inexistente em GET, PATCH, DELETE, rotate-secret ou deliveries | `AppError` | `Webhook not found` |
 | `WEBHOOK_INVALID_URL` | 400 | `url` com esquema diferente de `https:` no POST ou PATCH | `BadRequestError` | `Webhook URL must use https` |
 | `WEBHOOK_CUSTOMER_NOT_FOUND` | 404 | `customerId` do POST não existe em `customers` | `AppError` | `Customer not found` |
-| `WEBHOOK_SECRET_ROTATION_IN_PROGRESS` | 409 | Rotação pedida com `previousSecretExpiresAt > now` | `ConflictError` | `A secret rotation is already in its grace period` |
+| `WEBHOOK_SECRET_ROTATION_IN_PROGRESS` | 409 | Rotação pedida com `previousSecretExpiresAt > now`. Decisão deste FDD, não discutida na reunião (5.5, passo 2) | `ConflictError` | `A secret rotation is already in its grace period` |
 | `WEBHOOK_DEAD_LETTER_NOT_FOUND` | 404 | `:id` inexistente em `webhook_dead_letter` | `AppError` | `Dead letter entry not found` |
-| `WEBHOOK_DEAD_LETTER_ALREADY_REPLAYED` | 409 | Linha da DLQ com `replayedAt` preenchido | `ConflictError` | `Dead letter entry was already replayed` |
+| `WEBHOOK_DEAD_LETTER_ALREADY_REPLAYED` | 409 | Linha da DLQ com `replayedAt` preenchido. Decisão deste FDD, não discutida na reunião (5.4, passo 3) | `ConflictError` | `Dead letter entry was already replayed` |
 | `WEBHOOK_INACTIVE` | 409 | Replay para um webhook com `active = false`. Decisão deste FDD, não discutida na reunião (5.4, passo 4) | `ConflictError` | `Webhook is inactive` |
 
 Os códigos existentes `VALIDATION_ERROR` (400), `UNAUTHORIZED` (401) e `FORBIDDEN` (403) são reusados sem mudança.
@@ -742,3 +744,5 @@ Nenhum evento leva `secret`, `previousSecret`, assinatura, corpo de request ou c
 | Q-11 | Confirmar a decisão deste FDD de mover para a DLQ o evento de webhook inativo (5.3, passo 6) | DLQ com `WEBHOOK_INACTIVE`, com replay depois de reativar |
 | Q-12 | Confirmar a decisão deste FDD de recusar com 409 o replay para um webhook inativo (5.4, passo 4) | 409 `WEBHOOK_INACTIVE`. O ADMIN reativa o webhook e refaz o replay |
 | Q-10 | "Campos básicos" do payload além de `total_cents` ([ADR-008](adrs/ADR-008-gravar-payload-como-snapshot-na-insercao.md)) | Só `total_cents` |
+| Q-13 | Confirmar a decisão deste FDD de recusar uma nova rotação durante o grace period de 24h ([09:21] Sofia; 5.5, passo 2) | 409 `WEBHOOK_SECRET_ROTATION_IN_PROGRESS` |
+| Q-14 | Confirmar a decisão deste FDD de recusar o replay de uma linha da DLQ já reprocessada ([09:18] Diego; 5.4, passo 3) | 409 `WEBHOOK_DEAD_LETTER_ALREADY_REPLAYED` |

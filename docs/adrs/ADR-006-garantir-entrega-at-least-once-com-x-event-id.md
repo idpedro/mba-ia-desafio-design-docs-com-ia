@@ -25,7 +25,7 @@ Com a outbox ([ADR-001](ADR-001-usar-outbox-no-mysql-para-eventos-de-webhook.md)
 
 - At-least-once, com `X-Event-Id` para dedup no cliente
 - Exactly-once
-- At-most-once (um envio, sem retry)
+- At-most-once (um envio, sem retry) (alternativa plausível, não discutida na reunião)
 
 ## Decisão
 
@@ -60,7 +60,7 @@ Garantir uma única entrega por evento ([09:25] Diego).
 
 ### At-most-once
 
-Enviar uma vez e não reenviar.
+Enviar uma vez e não reenviar. Alternativa plausível, não discutida na reunião.
 
 - Bom, porque nunca duplica.
 - Ruim, porque perde o evento quando o cliente cai, contra o retry decidido em [09:17] Larissa. ← motivo do descarte

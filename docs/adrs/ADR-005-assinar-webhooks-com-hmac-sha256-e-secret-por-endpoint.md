@@ -25,7 +25,7 @@ Os eventos levam dados de pedidos para um endpoint fora da infraestrutura da pla
 
 - HMAC-SHA256 com secret por endpoint, rotacionável
 - HMAC com uma secret global da plataforma
-- Confiar só no TLS, sem assinatura
+- Confiar só no TLS, sem assinatura (alternativa plausível, não discutida na reunião)
 
 ## Decisão
 
@@ -62,7 +62,7 @@ Uma secret única para todos os clientes ([09:21] Sofia).
 
 ### Só TLS
 
-Confiar no `https` sem assinar o payload.
+Confiar no `https` sem assinar o payload. Alternativa plausível, não discutida na reunião.
 
 - Bom, porque não exige secret nem verificação no cliente.
 - Ruim, porque o cliente não consegue "validar que a requisição veio realmente da gente" ([09:19] Sofia). ← motivo do descarte

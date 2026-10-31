@@ -109,11 +109,12 @@ Marcar o evento morto com um status na outbox, sem tabela à parte ([09:17] Lari
 | Escalar para múltiplos workers, particionando por `order_id` ou com lock pessimista | Adiado | O worker único não esvaziar os pendentes dentro do ciclo de 2 segundos | [09:13] Diego |
 | Restringir por role o CRUD de configuração de webhooks, hoje aberto a qualquer role autenticada | Adiado | A revisão de segurança antes do deploy ([09:46] Sofia), ou a criação de um vínculo entre `User` e `Customer` | [09:37] Sofia |
 | O `X-Timestamp` fica fora do conteúdo assinado, porque o HMAC cobre só o corpo. Assim ele não serve para detectar replay, como foi proposto. Stripe e Standard Webhooks incluem o timestamp na assinatura | Não decidido | Revisão de segurança da Sofia, antes de publicar a documentação do contrato para os clientes | [09:44] Diego × [09:22] Sofia; [verificação externa](research/verificacao-externa.md), VER-013 |
+| Quem opera o worker em produção. A reunião só define que ele roda como processo separado, no mesmo banco | Não decidido | Antes do primeiro deploy do worker | [09:11] Diego |
 | Mesmo com um único worker, um evento em retry pode ser ultrapassado pelo evento seguinte do mesmo pedido, e eventos com o mesmo `created_at` não têm ordem garantida. A limitação de ordering do ADR-003 promete mais do que o desenho entrega | Não decidido | Antes de documentar a garantia de ordem no portal de desenvolvedor ([09:26] Marcos) | [09:12] Diego; [verificação externa](research/verificacao-externa.md), VER-005 |
 
 ## Impacto e Riscos
 
-**Impacto:** o time de Pedidos altera `changeStatus` (`src/modules/orders/order.service.ts`). O time de Plataforma passa a operar um segundo processo, que usa o mesmo banco ([09:11] Diego). Os três clientes B2B precisam implementar validação de assinatura e deduplicação ([09:25] Sofia). A documentação do portal de desenvolvedor fica com o Marcos ([09:26] Marcos).
+**Impacto:** o time de Pedidos altera `changeStatus` (`src/modules/orders/order.service.ts`). Passa a existir um segundo processo em produção, que usa o mesmo banco ([09:11] Diego); quem o opera não foi definido (Questões em Aberto). Os três clientes B2B precisam implementar validação de assinatura e deduplicação ([09:25] Sofia). A documentação do portal de desenvolvedor fica com o Marcos ([09:26] Marcos).
 
 | Risco | Probabilidade | Impacto | Mitigação | Fonte |
 | --- | --- | --- | --- | --- |
