@@ -7,7 +7,7 @@
 - **Correções na mesma sessão da geração**, antes do `/clear`.
 - **Prompts guardados na raiz:** `prompt-1.md` (research), `prompt-ard.md` (ADR), `prompt-rfc.md`, `prompt-fdd.md`, `prompt-prd.md`, `prompt-tracker.md` e `prompt-revisao.md`.
   - Os prompts de **research** e de **ADR** são meus.
-  - Os de **RFC, FDD, PRD, tracker e revisão** foram estruturados com ajuda da IA, por falta de tempo, a partir do que a revisão de cada etapa encontrou.
+  - Os de **RFC, FDD, PRD, tracker e revisão** foram estruturados com ajuda da IA a partir do que a revisão de cada etapa encontrou.
 - **Revisão automática em cada documento:** existência de cada `[hh:mm] Nome` na transcrição, existência de cada caminho de código, links entre os documentos e uma busca por termos que não deveriam aparecer (jitter, CDC, lock, "plausível").
 
 ## Commits (branch `docs/design-docs-skills`)
