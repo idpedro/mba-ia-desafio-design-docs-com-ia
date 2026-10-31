@@ -1,0 +1,1 @@
+Revise @docs/{ARQUIVO} contra @TRANSCRICAO.md e o código. Aponte, em tabela (severidade, trecho, problema, evidência): itens sem origem, itens descartados/adiados tratados como requisito, contradições com o código e detalhe que está no documento errado. Não reescreva.
